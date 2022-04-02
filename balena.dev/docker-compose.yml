@@ -6,12 +6,9 @@ services:
     image: chrisleekr/binance-trading-bot:latest
     networks:
       - internal
-    env_file:
-      - .env
     restart: unless-stopped
     environment:
-      # - BINANCE_MODE=test
-      - BINANCE_MODE=live
+      - BINANCE_MODE=test
       - BINANCE_REDIS_HOST=binance-redis
       - BINANCE_REDIS_PORT=6379
       - BINANCE_REDIS_PASSWORD=secretp422
@@ -45,8 +42,7 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
-    command:
-      redis-server /usr/local/etc/redis/redis.conf --requirepass secretp422
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass secretp422
 
   binance-mongo:
     container_name: binance-mongo
