@@ -1,8 +1,6 @@
 name: Release & Docker
 
-on:
-  repository_dispatch:
-    types: [Release & Docker]
+on: [workflow_dispatch]
     
 env:
   # Use docker.io for Docker Hub if empty
