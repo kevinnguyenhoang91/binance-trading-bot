@@ -1,0 +1,97 @@
+name: Release & Docker
+
+on:
+  repository_dispatch:
+    types: [Release & Docker]
+    
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ghcr.io
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.client_payload.ref }}
+          release_name:
+            '<Update release name for ${{ github.event.client_payload.ref }}>'
+          draft: true
+          prerelease: false
+
+  docker-images:
+    name: Build/Push production docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
+    steps:
+      - id: github_repository
+        uses: ASzc/change-string-case-action@v1
+        with:
+          string: ${{ github.repository }}
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+
+      # https://github.com/docker/setup-qemu-action#usage
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      # https://github.com/marketplace/actions/docker-setup-buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v1.14.1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get build args
+        run: |
+          echo "PACKAGE_VERSION=$(grep -m1 version package.json | cut -c 15- | rev | cut -c 3- | rev)" >> $GITHUB_ENV
+          echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      # https://github.com/docker/build-push-action#multi-platform-image
+      - name: Build/Push production docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          push: true
+          target: production-stage
+          build-args: |
+            PACKAGE_VERSION=${{ env.PACKAGE_VERSION }}
+            GIT_HASH=${{ env.GIT_HASH }}
+            NODE_ENV=production
+          tags: |
+            ${{ env.REGISTRY }}/kevinnguyenhoang91/binance-trading-bot:latest
+            ${{ env.REGISTRY }}/kevinnguyenhoang91/binance-trading-bot:${{ env.PACKAGE_VERSION }}
+
+      # https://github.com/docker/build-push-action#multi-platform-image
+      - name: Build/Push production docker image - tradingview
+        uses: docker/build-push-action@v2
+        with:
+          context: ./tradingview
+          file: ./tradingview/Dockerfile
+          platforms: linux/amd64,linux/arm/v7,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/kevinnguyenhoang91/binance-trading-bot:tradingview
+            ${{ env.REGISTRY }}/kevinnguyenhoang91/binance-trading-bot:tradingview-${{ env.PACKAGE_VERSION }}
